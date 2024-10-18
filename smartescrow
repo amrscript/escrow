@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Escrow {
+    address public buyer;
+    address public seller;
+    address public escrowAgent;
+    uint public amount;
+
+    enum State { Created, Funded, Completed, Cancelled }
+    State public state;
+
+    event Funded(address indexed buyer, uint amount);
+    event Completed(address indexed seller);
+    event Cancelled(address indexed seller);
+
+    modifier onlyBuyer() {
+        require(msg.sender == buyer, "Only buyer can call this function.");
+        _;
+    }
+
+    modifier onlySeller() {
+        require(msg.sender == seller, "Only seller can call this function.");
+        _;
+    }
+
+    modifier onlyEscrowAgent() {
+        require(msg.sender == escrowAgent, "Only escrow agent can call this function.");
+        _;
+    }
+
+    modifier inState(State _state) {
+        require(state == _state, "Invalid state.");
+        _;
+    }
+
+    constructor(address _seller, address _escrowAgent) {
+        buyer = msg.sender;
+        seller = _seller;
+        escrowAgent = _escrowAgent;
+        state = State.Created;
+    }
+
+    // Function for buyer to fund the escrow
+    function fund() external payable onlyBuyer inState(State.Created) {
+        require(msg.value > 0, "Must send ether to fund escrow.");
+        amount = msg.value;
+        state = State.Funded;
+        emit Funded(buyer, amount);
+    }
+
+    // Function for the escrow agent to complete the transaction
+    function complete() external onlyEscrowAgent inState(State.Funded) {
+        require(amount > 0, "No funds to complete the transaction.");
+        state = State.Completed;
+        payable(seller).transfer(amount);
+        amount = 0;
+        emit Completed(seller);
+    }
+
+    // Function to cancel the escrow agreement
+    function cancel() external onlyEscrowAgent inState(State.Funded) {
+        state = State.Cancelled;
+        payable(buyer).transfer(amount);
+        amount = 0;
+        emit Cancelled(seller);
+    }
+}
